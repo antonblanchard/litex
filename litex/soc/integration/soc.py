@@ -1025,9 +1025,12 @@ class SoC(Module):
                         slave  = next(iter(self.dma_bus.slaves.values())))
                 # Otherwise, use InterconnectShared.
                 else:
+                    adr_width=self.dma_bus.address_width-log2_int(self.dma_bus.data_width//8)
                     self.submodules.dma_bus_interconnect = wishbone.InterconnectShared(
                         masters        = self.dma_bus.masters.values(),
                         slaves         = [(self.dma_bus.regions[n].decoder(self.dma_bus), s) for n, s in self.dma_bus.slaves.items()],
+                        data_width     = self.dma_bus.data_width,
+                        adr_width      = adr_width,
                         register       = True)
                 self.bus.logger.info("DMA Interconnect: {} ({} <-> {}).".format(
                     colorer(self.dma_bus_interconnect.__class__.__name__),
@@ -1574,18 +1577,18 @@ class LiteXSoC(SoC):
 
         # Block2Mem DMA.
         if "read" in mode:
-            bus = wishbone.Interface(data_width=self.bus.data_width, adr_width=self.bus.address_width)
+            dma_bus = self.bus if not hasattr(self, "dma_bus") else self.dma_bus
+            bus = wishbone.Interface(data_width=dma_bus.data_width, adr_width=dma_bus.address_width)
             self.submodules.sdblock2mem = SDBlock2MemDMA(bus=bus, endianness=self.cpu.endianness)
             self.comb += self.sdcore.source.connect(self.sdblock2mem.sink)
-            dma_bus = self.bus if not hasattr(self, "dma_bus") else self.dma_bus
             dma_bus.add_master("sdblock2mem", master=bus)
 
         # Mem2Block DMA.
         if "write" in mode:
-            bus = wishbone.Interface(data_width=self.bus.data_width, adr_width=self.bus.address_width)
+            dma_bus = self.bus if not hasattr(self, "dma_bus") else self.dma_bus
+            bus = wishbone.Interface(data_width=dma_bus.data_width, adr_width=dma_bus.address_width)
             self.submodules.sdmem2block = SDMem2BlockDMA(bus=bus, endianness=self.cpu.endianness)
             self.comb += self.sdmem2block.source.connect(self.sdcore.sink)
-            dma_bus = self.bus if not hasattr(self, "dma_bus") else self.dma_bus
             dma_bus.add_master("sdmem2block", master=bus)
 
         # Interrupts.
